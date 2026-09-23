@@ -19,8 +19,8 @@
  */
 
 @theme inline {
-  --font-sans: "Inter", sans-serif;
-  --font-display: "Bebas Neue", sans-serif;
+  --font-sans: "DM Sans", sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
   --font-mono: "JetBrains Mono", monospace;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -104,12 +104,12 @@
   --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
   --sidebar-border: oklch(0.929 0.013 255.508);
   --sidebar-ring: oklch(0.704 0.04 256.788);
-  --gold: oklch(0.82 0.16 88);
-  --estonia: oklch(0.58 0.18 245);
+  --gold: oklch(0.68 0.075 82);
+  --estonia: oklch(0.52 0.15 245);
   --signal: oklch(0.64 0.24 28);
-  --ink: oklch(0.14 0.015 276);
-  --paper: oklch(0.97 0.01 90);
-  --panel: oklch(0.19 0.02 275);
+  --ink: oklch(0.18 0.006 80);
+  --paper: oklch(0.975 0.008 95);
+  --panel: oklch(0.94 0.006 95);
 }
 
 .dark {
