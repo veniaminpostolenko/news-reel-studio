@@ -1,12 +1,10 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowDown, ArrowUpRight, BookOpen, Cpu, Landmark, Trophy } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { ArrowLeft, ArrowRight, ArrowUpRight, BookOpen, Cpu, Landmark, Trophy } from "lucide-react";
 import gsap from "gsap";
-import { ScrollTrigger } from "gsap/ScrollTrigger";
-import Lenis from "lenis";
+import { Button } from "@/components/ui/button";
 import ronaldoAlNassr from "../assets/ronaldo-alnassr.png";
 import ronaldoRealMadrid from "../assets/ronaldo-realmadrid.png";
-
-gsap.registerPlugin(ScrollTrigger);
+import heroNewsCast from "../assets/hero-news-cast.jpg";
 
 const PRESENTERS = "[NIMI 1] & [NIMI 2]";
 const ERR_LINK = "https://www.err.ee/";
@@ -19,12 +17,13 @@ type NewsSlideProps = {
   summary: string;
   source: string;
   tone: "president" | "pisa" | "ai" | "sport";
+  active: boolean;
   children: ReactNode;
 };
 
-function NewsSlide({ id, number, kicker, headline, summary, source, tone, children }: NewsSlideProps) {
+function NewsSlide({ id, number, kicker, headline, summary, source, tone, active, children }: NewsSlideProps) {
   return (
-    <section id={id} data-section={number} className={`news-section section-${tone}`}>
+    <section id={id} data-section={number} aria-hidden={!active} className={`deck-slide news-section section-${tone} ${active ? "is-active" : ""}`}>
       <span className="ghost-number" aria-hidden="true">{number}</span>
       <div className="section-wash" aria-hidden="true" />
       <div className="story-copy reveal">
@@ -75,15 +74,36 @@ function PisaVisual() {
   );
 }
 
-function AiVisual() {
+function AiVisual({ active }: { active: boolean }) {
   const rain = ["01001101", "DELETE *", "01100110", "DROP DB", "10110101", "NO BACKUP"];
+  const text = "> claude --execute\n> kustutan andmebaasi...\n> varukoopiad eemaldatud\n> valmis: üheksa sekundiga";
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    if (!active) {
+      setElapsed(0);
+      return;
+    }
+    const started = performance.now();
+    let frame = 0;
+    const tick = (now: number) => {
+      const next = Math.min(9, (now - started) / 1000);
+      setElapsed(next);
+      if (next < 9) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [active]);
+
+  const typed = text.slice(0, Math.floor(text.length * (elapsed / 9)));
   return (
     <div className="ai-visual">
       <div className="code-rain" aria-hidden="true">{rain.map((line, i) => <span key={i}>{line}</span>)}</div>
-      <div className="terminal">
+      <div className={`terminal ${elapsed >= 9 ? "is-done" : ""}`}>
         <div className="terminal-top"><i /><i /><i /><span>pocketOS / production</span></div>
-        <code className="terminal-copy" data-text="> claude --execute\n> kustutan andmebaasi...\n> varukoopiad eemaldatud\n> valmis: üheksa sekundiga"><span /></code>
-        <div className="delete-progress"><i /></div>
+        <div className="ai-timer" aria-label={`Möödunud ${elapsed.toFixed(1)} sekundit`}><strong>{elapsed.toFixed(1)}</strong><span>/ 9.0 SEK</span></div>
+        <code className="terminal-copy"><span>{typed}</span></code>
+        <div className="delete-progress"><i style={{ transform: `scaleX(${1 - elapsed / 9})` }} /></div>
         <div className="stamp">9 SEKUNDIT</div>
       </div>
     </div>
@@ -137,73 +157,71 @@ const sources = [
 
 export function NewsPresentation() {
   const rootRef = useRef<HTMLElement>(null);
-  const [active, setActive] = useState("01");
-  const [progress, setProgress] = useState(0);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const active = String(activeIndex + 1).padStart(2, "0");
+  const goTo = useCallback((index: number) => setActiveIndex(Math.max(0, Math.min(6, index))), []);
 
   useEffect(() => {
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    let lenis: Lenis | undefined;
-    let frame = 0;
-    if (!reduceMotion) {
-      lenis = new Lenis({ duration: 1.05, smoothWheel: true });
-      const raf = (time: number) => { lenis?.raf(time); frame = requestAnimationFrame(raf); };
-      frame = requestAnimationFrame(raf);
-    }
+    const section = rootRef.current?.querySelector<HTMLElement>(`.deck-slide[data-section="${active}"]`);
+    if (!section || reduceMotion) return;
     const context = gsap.context(() => {
-      document.querySelectorAll<HTMLElement>("[data-section]").forEach((section) => {
-        ScrollTrigger.create({ trigger: section, start: "top center", end: "bottom center", onToggle: ({ isActive }) => { if (isActive) setActive(section.dataset.section ?? "01"); } });
+      gsap.fromTo(section.querySelectorAll(".reveal"), { opacity: 0, y: 36 }, { opacity: 1, y: 0, duration: .75, stagger: .08, ease: "power3.out" });
+      section.querySelectorAll<HTMLElement>("[data-count]").forEach((element) => {
+        const target = Number(element.dataset["count"] ?? 0);
+        const counter = { value: 0 };
+        gsap.to(counter, { value: target, duration: 1.5, ease: "power2.out", onUpdate: () => { element.textContent = Math.round(counter.value).toString(); } });
       });
-      ScrollTrigger.create({ start: 0, end: "max", onUpdate: (self) => setProgress(self.progress * 100) });
-      if (reduceMotion) return;
-      gsap.utils.toArray<HTMLElement>(".reveal").forEach((element) => gsap.from(element, { opacity: 0, y: 54, duration: 0.9, ease: "power3.out", scrollTrigger: { trigger: element, start: "top 84%", once: true } }));
-      document.querySelectorAll<HTMLElement>("[data-count]").forEach((element) => {
-        const target = Number(element.dataset.count);
-        gsap.to({ value: 0 }, { value: target, duration: 1.5, ease: "power2.out", scrollTrigger: { trigger: element, start: "top 82%", once: true }, onUpdate() { element.textContent = Math.round(this.targets()[0].value).toString(); } });
-      });
-      document.querySelectorAll<HTMLElement>(".bar-track i").forEach((bar) => gsap.to(bar, { width: bar.dataset.width, duration: 1.3, ease: "power3.out", scrollTrigger: { trigger: bar, start: "top 85%", once: true } }));
-      const terminal = document.querySelector<HTMLElement>(".terminal-copy span");
-      const terminalHost = document.querySelector<HTMLElement>(".terminal-copy");
-      if (terminal && terminalHost) {
-        const text = terminalHost.dataset.text ?? "";
-        const typing = { count: 0 };
-        gsap.to(typing, { count: text.length, duration: 3.2, ease: "none", scrollTrigger: { trigger: terminal, start: "top 80%", once: true }, onUpdate: () => { terminal.textContent = text.slice(0, Math.floor(typing.count)); }, onComplete: () => document.querySelector(".terminal")?.classList.add("is-done") });
-      }
-      gsap.from(".ronaldo-wrap", { y: "-120vh", rotate: -10, duration: 1.05, ease: "bounce.out", scrollTrigger: { trigger: ".section-sport", start: "top 68%", once: true }, onComplete: () => document.querySelector(".ronaldo-scene")?.classList.add("landed") });
-      gsap.from(".reason-card", { opacity: 0, rotateX: -70, y: 70, stagger: 0.14, duration: 0.8, ease: "back.out(1.4)", scrollTrigger: { trigger: ".reasons-grid", start: "top 80%", once: true } });
-    }, rootRef);
-    ScrollTrigger.refresh();
-    return () => { context.revert(); lenis?.destroy(); cancelAnimationFrame(frame); };
-  }, []);
+      section.querySelectorAll<HTMLElement>(".bar-track i").forEach((bar) => gsap.fromTo(bar, { width: 0 }, { width: bar.dataset["width"] ?? "0%", duration: 1.3, ease: "power3.out" }));
+      if (activeIndex === 4) gsap.fromTo(section.querySelector(".ronaldo-wrap"), { y: "-120vh", rotate: -10 }, { y: 0, rotate: 0, duration: 1.05, ease: "bounce.out", onComplete: () => section.querySelector(".ronaldo-scene")?.classList.add("landed") });
+      if (activeIndex === 5) gsap.fromTo(section.querySelectorAll(".reason-card"), { opacity: 0, rotateX: -70, y: 70 }, { opacity: 1, rotateX: 0, y: 0, stagger: .14, duration: .8, ease: "back.out(1.4)" });
+    }, section);
+    return () => context.revert();
+  }, [active, activeIndex]);
+
+  useEffect(() => {
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "ArrowRight") goTo(activeIndex + 1);
+      if (event.key === "ArrowLeft") goTo(activeIndex - 1);
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [activeIndex, goTo]);
 
   return (
     <main ref={rootRef} className="presentation-shell">
-      <div className="progress-track" aria-hidden="true"><i style={{ transform: `scaleX(${progress / 100})` }} /></div>
+      <div className="progress-track" aria-hidden="true"><i style={{ transform: `scaleX(${(activeIndex + 1) / 7})` }} /></div>
       <aside className="section-indicator" aria-label="Praegune osa"><strong>{active}</strong><span>/ 07</span></aside>
+      <nav className="deck-controls" aria-label="Slaidide juhtimine">
+        <Button variant="outline" size="icon" onClick={() => goTo(activeIndex - 1)} disabled={activeIndex === 0} aria-label="Eelmine slaid"><ArrowLeft /></Button>
+        <span>{active} / 07</span>
+        <Button variant="outline" size="icon" onClick={() => goTo(activeIndex + 1)} disabled={activeIndex === 6} aria-label="Järgmine slaid"><ArrowRight /></Button>
+      </nav>
 
-      <section className="hero-section" data-section="01">
+      <section className={`deck-slide hero-section ${activeIndex === 0 ? "is-active" : ""}`} data-section="01" aria-hidden={activeIndex !== 0}>
         <div className="hero-grid" aria-hidden="true" />
+        <img className="hero-cast" src={heroNewsCast} alt="Ülle Madise, Eesti õpilane, tehisintellekt ja Cristiano Ronaldo" width={1920} height={1088} />
         <div className="hero-content">
           <p className="hero-label">SEPTEMBER 2026 · UUDISTE ÜLEVAADE</p>
           <h1><span>4</span> UUDIST</h1>
           <div className="outlet-row">{["ERR", "Delfi", "Postimees", "Õhtuleht"].map((name) => <b key={name}>{name}</b>)}</div>
           <p className="presenters">{PRESENTERS}</p>
         </div>
-        <a href="#president" className="scroll-cue" aria-label="Keri järgmise uudiseni"><span>KERI ALLA</span><ArrowDown size={22} /></a>
       </section>
 
-      <NewsSlide id="president" number="02" kicker="POLIITIKA" headline="Riigikogu valis presidendiks Ülle Madise" summary="2. septembril valis Riigikogu salajasel hääletusel Eesti uueks presidendiks põhiseadusjuristi ja õiguskantsleri Ülle Madise. Tema poolt hääletas 71 saadikut, võiduks oli vaja 68 häält. Madise on Eesti seitsmes president ja teine naispresident. Ametisse astub ta 12. oktoobril." source="Postimees · 02.09.2026" tone="president"><PresidentVisual /></NewsSlide>
-      <NewsSlide id="pisa" number="03" kicker="HARIDUS" headline="PISA 2025: Eesti püsib Euroopas esikohal, kuid lugemisoskus halveneb" summary="8. septembril avaldatud PISA 2025 tulemuste järgi on Eesti 15-aastaste õpilaste teadmised jätkuvalt Euroopa parimate hulgas: loodusteadustes 527, matemaatikas 508 ja lugemises 499 punkti. OECD riikide seas edestas Eestit üldpunktidega vaid Jaapan. Samas on lugemisoskus langenud, mis teeb hariduseksperte murelikuks." source="Delfi · 08.09.2026" tone="pisa"><PisaVisual /></NewsSlide>
-      <NewsSlide id="ai" number="04" kicker="TEHNOLOOGIA" headline="AI kustutas ettevõtte kogu andmebaasi üheksa sekundiga" summary="Tarkvarafirma PocketOS tehisintellekt Claude otsustas omapäi kustutada kogu ettevõtte andmebaasi koos varukoopiatega. Kadusid klientide andmed ja broneeringud. „See võttis üheksa sekundit,“ kirjutas asutaja Jer Crane. Andmed õnnestus mõne päevaga taastada." source="Õhtuleht · 03.05.2026" tone="ai"><AiVisual /></NewsSlide>
-      <NewsSlide id="ronaldo" number="05" kicker="SPORT" headline="Ronaldo nõuab fännidele eluaegset staadionikeeldu" summary="Saudi profiliiga mängu ajal skandeerisid Al-Taawouni fännid Al-Hilali mängija Ruben Nevesi suunas tema surnud meeskonnakaaslase Diogo Jota nime. Cristiano Ronaldo ütles, et sellised fännid tuleks staadionile eluks ajaks keelata. Mäng lõppes Al-Hilali 6:0 võiduga." source="ERR · 13.09.2026" tone="sport"><RonaldoVisual /></NewsSlide>
+      <NewsSlide active={activeIndex === 1} id="president" number="02" kicker="POLIITIKA" headline="Riigikogu valis presidendiks Ülle Madise" summary="2. septembril valis Riigikogu salajasel hääletusel Eesti uueks presidendiks põhiseadusjuristi ja õiguskantsleri Ülle Madise. Tema poolt hääletas 71 saadikut, võiduks oli vaja 68 häält. Madise on Eesti seitsmes president ja teine naispresident. Ametisse astub ta 12. oktoobril." source="Postimees · 02.09.2026" tone="president"><PresidentVisual /></NewsSlide>
+      <NewsSlide active={activeIndex === 2} id="pisa" number="03" kicker="HARIDUS" headline="PISA 2025: Eesti püsib Euroopas esikohal, kuid lugemisoskus halveneb" summary="8. septembril avaldatud PISA 2025 tulemuste järgi on Eesti 15-aastaste õpilaste teadmised jätkuvalt Euroopa parimate hulgas: loodusteadustes 527, matemaatikas 508 ja lugemises 499 punkti. OECD riikide seas edestas Eestit üldpunktidega vaid Jaapan. Samas on lugemisoskus langenud, mis teeb hariduseksperte murelikuks." source="Delfi · 08.09.2026" tone="pisa"><PisaVisual /></NewsSlide>
+      <NewsSlide active={activeIndex === 3} id="ai" number="04" kicker="TEHNOLOOGIA" headline="AI kustutas ettevõtte kogu andmebaasi üheksa sekundiga" summary="Tarkvarafirma PocketOS tehisintellekt Claude otsustas omapäi kustutada kogu ettevõtte andmebaasi koos varukoopiatega. Kadusid klientide andmed ja broneeringud. „See võttis üheksa sekundit,“ kirjutas asutaja Jer Crane. Andmed õnnestus mõne päevaga taastada." source="Õhtuleht · 03.05.2026" tone="ai"><AiVisual active={activeIndex === 3} /></NewsSlide>
+      <NewsSlide active={activeIndex === 4} id="ronaldo" number="05" kicker="SPORT" headline="Ronaldo nõuab fännidele eluaegset staadionikeeldu" summary="Saudi profiliiga mängu ajal skandeerisid Al-Taawouni fännid Al-Hilali mängija Ruben Nevesi suunas tema surnud meeskonnakaaslase Diogo Jota nime. Cristiano Ronaldo ütles, et sellised fännid tuleks staadionile eluks ajaks keelata. Mäng lõppes Al-Hilali 6:0 võiduga." source="ERR · 13.09.2026" tone="sport"><RonaldoVisual /></NewsSlide>
 
-      <section className="reasons-section" data-section="06">
+      <section className={`deck-slide reasons-section ${activeIndex === 5 ? "is-active" : ""}`} data-section="06" aria-hidden={activeIndex !== 5}>
         <span className="ghost-number" aria-hidden="true">06</span>
         <div className="kicker"><span />MEIE VALIK</div>
         <h2>Miks me need uudised valisime?</h2>
         <div className="reasons-grid">{reasons.map(({ Icon, source, tone, text }) => <article className={`reason-card ${tone}`} key={source}><Icon aria-hidden="true" /><b>{source}</b><p>{text}</p></article>)}</div>
       </section>
 
-      <section className="sources-section" data-section="07">
+      <section className={`deck-slide sources-section ${activeIndex === 6 ? "is-active" : ""}`} data-section="07" aria-hidden={activeIndex !== 6}>
         <span className="ghost-number" aria-hidden="true">07</span>
         <div className="kicker"><span />VIITED</div>
         <h2>Allikad</h2>
